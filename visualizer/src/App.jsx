@@ -16,17 +16,18 @@ const App = () => {
         .split("&")
         .find((elem) => elem.startsWith("access_token"))
         .split("=")[1];
-
       tokenFromHash = parsedToken;
       window.location.hash = "";
       window.localStorage.setItem("spotify_token", tokenFromHash);
     }
     setToken(tokenFromHash);
-  }, []);
 
+  }, []);
+    
+
+  // Optional: You can remove polling if you rely solely on real-time events.
   useEffect(() => {
     if (!token) return;
-
     const fetchCurrentTrack = async () => {
       try {
         const res = await fetch(
@@ -48,8 +49,8 @@ const App = () => {
       }
     };
 
-    // Poll every 5 seconds
-    fetchCurrentTrack();
+    // Poll every 5 seconds (optional if you are using real-time events for reliability)
+    fetchCurrentTrack(); 
     const interval = setInterval(fetchCurrentTrack, 5000);
     return () => clearInterval(interval);
   }, [token]);
@@ -71,7 +72,7 @@ const App = () => {
           >
             Logout
           </button>
-          <Visualizer track={track} />
+          <Visualizer track={track} token={token} />
         </>
       )}
     </div>
