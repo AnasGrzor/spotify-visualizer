@@ -1,11 +1,14 @@
 const SpotifyAuth = () => {
-    const PORT = 5173;
+  const PORT = 5173;
   // Replace with your own Spotify client ID and redirect URI
-  const CLIENT_ID = "6d618041072b4ffb85739332f857cdb3";
-  const REDIRECT_URI = `http://localhost:${PORT}/callback`;
+  const CLIENT_ID = import.meta.env.VITE_CLIENT_ID;
+  const REDIRECT_URI = import.meta.env.DEV
+    ? `http://localhost:${PORT}/callback`
+    : "https://spotify-visualizer-beta.vercel.app/callback";
   const AUTH_ENDPOINT = "https://accounts.spotify.com/authorize";
   const RESPONSE_TYPE = "token";
-  const SCOPE = "user-read-currently-playing user-read-playback-state user-modify-playback-state";
+  const SCOPE =
+    "user-read-currently-playing user-read-playback-state user-modify-playback-state";
 
   const loginUrl = `${AUTH_ENDPOINT}?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(
     REDIRECT_URI
