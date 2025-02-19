@@ -7,7 +7,7 @@ const SpotifyAuth = () => {
   const AUTH_ENDPOINT = "https://accounts.spotify.com/authorize";
   const RESPONSE_TYPE = "token";
   const SCOPE =
-    "user-read-currently-playing user-read-playback-state user-modify-playback-state";
+    "user-read-currently-playing user-read-playback-state user-modify-playback-state streaming user-read-email user-read-private";
 
   const loginUrl = `${AUTH_ENDPOINT}?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(
     REDIRECT_URI

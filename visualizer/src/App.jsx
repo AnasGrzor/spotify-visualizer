@@ -6,6 +6,7 @@ import { FaPowerOff } from "react-icons/fa";
 const App = () => {
   const [token, setToken] = useState("");
   const [track, setTrack] = useState(null);
+  const [player, setPlayer] = useState(null);
 
   // On initial load, extract token and expiry info.
   useEffect(() => {
@@ -28,7 +29,6 @@ const App = () => {
   // Check for token expiry and log the user out when expired.
   useEffect(() => {
     if (!token) return;
-
     const checkExpiry = () => {
       const expiryTime = parseInt(
         window.localStorage.getItem("spotify_token_expiry")
@@ -38,37 +38,62 @@ const App = () => {
         handleLogout();
       }
     };
-
     const interval = setInterval(checkExpiry, 10000); // check every 10 seconds
     return () => clearInterval(interval);
   }, [token]);
 
-  // Poll for the currently playing track.
+  // Initialize the Spotify Web Playback SDK when the token becomes available.
   useEffect(() => {
     if (!token) return;
-    const fetchCurrentTrack = async () => {
-      try {
-        const res = await fetch(
-          "https://api.spotify.com/v1/me/player/currently-playing",
-          {
-            headers: { Authorization: "Bearer " + token },
-          }
-        );
-        if (res.status === 204 || res.status > 400) {
-          setTrack(null);
-          return;
+
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      const spotifyPlayer = new window.Spotify.Player({
+        name: "Spotify Visualizer Player",
+        getOAuthToken: (cb) => {
+          cb(token);
+        },
+        volume: 0.5,
+      });
+
+      // Error handling.
+      spotifyPlayer.addListener("initialization_error", ({ message }) => {
+        console.error(message);
+      });
+      spotifyPlayer.addListener("authentication_error", ({ message }) => {
+        console.error(message);
+        handleLogout();
+      });
+      spotifyPlayer.addListener("account_error", ({ message }) => {
+        console.error(message);
+      });
+      spotifyPlayer.addListener("playback_error", ({ message }) => {
+        console.error(message);
+      });
+
+      // Ready event.
+      spotifyPlayer.addListener("ready", ({ device_id }) => {
+        console.log("Ready with Device ID", device_id);
+        // Optionally, transfer playback to the new device.
+      });
+
+      // Listen for playback status changes.
+      spotifyPlayer.addListener("player_state_changed", (state) => {
+        if (state && state.track_window && state.track_window.current_track) {
+          setTrack(state.track_window.current_track);
         }
-        const data = await res.json();
-        setTrack(data);
-      } catch (error) {
-        console.error(error);
-        setTrack(null);
-      }
+      });
+
+      // Connect to the player!
+      spotifyPlayer.connect();
+      setPlayer(spotifyPlayer);
     };
 
-    fetchCurrentTrack();
-    const interval = setInterval(fetchCurrentTrack, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      document.body.removeChild(script);
+      if (player) {
+        player.disconnect();
+      }
+    };
   }, [token]);
 
   const handleLogout = () => {
