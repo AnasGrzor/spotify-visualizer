@@ -6,26 +6,43 @@ const App = () => {
   const [token, setToken] = useState("");
   const [track, setTrack] = useState(null);
 
+  // On initial load, extract token and expiry info.
   useEffect(() => {
-    // Check for token in URL hash or localStorage
     const hash = window.location.hash;
     let tokenFromHash = window.localStorage.getItem("spotify_token");
+    let expiry = window.localStorage.getItem("spotify_token_expiry");
+
     if (!tokenFromHash && hash) {
-      const parsedToken = hash
-        .substring(1)
-        .split("&")
-        .find((elem) => elem.startsWith("access_token"))
-        .split("=")[1];
-      tokenFromHash = parsedToken;
-      window.location.hash = "";
+      const params = new URLSearchParams(hash.substring(1));
+      tokenFromHash = params.get("access_token");
+      const expiresIn = parseInt(params.get("expires_in")); // seconds
+      expiry = Date.now() + expiresIn * 1000;
       window.localStorage.setItem("spotify_token", tokenFromHash);
+      window.localStorage.setItem("spotify_token_expiry", expiry);
+      window.location.hash = "";
     }
     setToken(tokenFromHash);
-
   }, []);
-    
 
-  // Optional: You can remove polling if you rely solely on real-time events.
+  // Check for token expiry and log the user out when expired.
+  useEffect(() => {
+    if (!token) return;
+
+    const checkExpiry = () => {
+      const expiryTime = parseInt(
+        window.localStorage.getItem("spotify_token_expiry")
+      );
+      if (Date.now() > expiryTime) {
+        console.log("Access token expired. Logging out user.");
+        handleLogout();
+      }
+    };
+
+    const interval = setInterval(checkExpiry, 10000); // check every 10 seconds
+    return () => clearInterval(interval);
+  }, [token]);
+
+  // Poll for the currently playing track.
   useEffect(() => {
     if (!token) return;
     const fetchCurrentTrack = async () => {
@@ -36,7 +53,6 @@ const App = () => {
             headers: { Authorization: "Bearer " + token },
           }
         );
-        // A 204 status means no content (nothing is playing)
         if (res.status === 204 || res.status > 400) {
           setTrack(null);
           return;
@@ -49,8 +65,7 @@ const App = () => {
       }
     };
 
-    // Poll every 5 seconds (optional if you are using real-time events for reliability)
-    fetchCurrentTrack(); 
+    fetchCurrentTrack();
     const interval = setInterval(fetchCurrentTrack, 5000);
     return () => clearInterval(interval);
   }, [token]);
@@ -58,6 +73,7 @@ const App = () => {
   const handleLogout = () => {
     setToken("");
     window.localStorage.removeItem("spotify_token");
+    window.localStorage.removeItem("spotify_token_expiry");
   };
 
   return (
@@ -66,12 +82,12 @@ const App = () => {
         <SpotifyAuth />
       ) : (
         <>
-          <button
+          {/* <button
             className="absolute top-5 right-5 px-4 py-2 bg-green-500 text-white rounded-full cursor-pointer z-10"
             onClick={handleLogout}
           >
             Logout
-          </button>
+          </button> */}
           <Visualizer track={track} token={token} />
         </>
       )}

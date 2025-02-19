@@ -177,6 +177,23 @@ const Visualizer = ({ track, token }) => {
     let scaleOsc = 1;
     let targetScaleOsc = 1;
 
+    // Add this above the useEffect (or inside it, before animate) to track ripples:
+    const ripples = [];
+
+    // Add this at the top inside your useEffect (before animate) to initialize particles:
+    let bgParticles = [];
+    const particleCount = 50;
+    for (let i = 0; i < particleCount; i++) {
+      bgParticles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 2 + 1,
+        brightness: Math.random() * 0.5 + 0.5,
+        velocityX: (Math.random() - 0.5) * 0.2,
+        velocityY: (Math.random() - 0.5) * 0.2,
+      });
+    }
+
     // Animate loop.
     const animate = () => {
       if (!isPlayingRef.current) {
@@ -189,13 +206,26 @@ const Visualizer = ({ track, token }) => {
       targetScaleOsc = 1 + 0.02 * Math.sin(phase * 2);
       scaleOsc = lerp(scaleOsc, targetScaleOsc, 0.02);
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.2)"; // Adjust the alpha to control trail length.
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // --- Shake Effect --- //
+      let shakeX = 0;
+      let shakeY = 0;
+      // Only apply a shake if popMagnitude is above a threshold.
+      if (popMagnitude > 1.3) {
+        const shakeIntensity = (popMagnitude - 1.3) * 10; // Adjust multiplier as needed.
+        shakeX = (Math.random() - 0.5) * shakeIntensity;
+        shakeY = (Math.random() - 0.5) * shakeIntensity;
+      }
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
 
       // Update color.
       currentColorRGB = currentColorRGB.map((c, i) =>
         lerp(c, targetColorRGB[i], fadeSpeed)
       );
-      const currentColor = rgbToString(currentColorRGB);
+      let currentColor = rgbToString(currentColorRGB);
       popMagnitude = lerp(popMagnitude, targetPopMagnitude, 0.02);
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
@@ -247,8 +277,21 @@ const Visualizer = ({ track, token }) => {
       });
       ctx.restore();
 
-      // Draw inner circle with album cover ("record").
-      const innerRadius = baseRadius / 3;
+      // Draw outer record border.
+      const recordBorderRadius = baseRadius / 2.5; // Adjust as needed.
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, recordBorderRadius, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.fillStyle = "#222"; // Record base color.
+      ctx.fill();
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = "#444"; // Record groove/stroke.
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw inner circle with album cover ("label").
+      const innerRadius = baseRadius / 3; // Inner label radius.
       ctx.save();
       ctx.translate(centerX, centerY);
       ctx.rotate(phase);
@@ -270,7 +313,77 @@ const Visualizer = ({ track, token }) => {
       }
       ctx.restore();
 
-      // Draw subtle gradient overlay for a vignette effect.
+      // --- Add Ripple Effect --- //
+      // Create a new ripple if popMagnitude is high, there are less than 5 ripples, and randomly (30% chance).
+      if (popMagnitude > 1.4 && ripples.length < 5 && Math.random() < 0.3) {
+        // Start the ripple at the outer edge of the main shape.
+        const startRadius = baseRadius + Math.random() * 5;
+        const startAlpha = 0.8 + Math.random() * 0.2; // Random alpha between 0.8 and 1.
+        ripples.push({ radius: startRadius, alpha: startAlpha });
+      }
+
+      // Update and draw each ripple.
+      ctx.save();
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        const ripple = ripples[i];
+        // Increase the ripple's radius and fade it.
+        ripple.radius += 4;
+        ripple.alpha -= 0.02;
+        if (ripple.alpha <= 0) {
+          ripples.splice(i, 1);
+          continue;
+        }
+        // Match the ripple color with currentColor by converting it to rgba.
+        const rippleColor = currentColor
+          .replace("rgb(", "rgba(")
+          .replace(")", `,${ripple.alpha})`);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, ripple.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = rippleColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // ----- Dynamic Color Transitions & Geometric Layering ----- //
+
+      // Update color dynamically. (Assuming currentColorRGB and targetColorRGB are already used.)
+      currentColorRGB = currentColorRGB.map((c, i) =>
+        lerp(c, targetColorRGB[i], fadeSpeed)
+      );
+      currentColor = rgbToString(currentColorRGB);
+
+      // Add an extra geometric layer: a rotating spiral vortex that starts outside the album cover.
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(phase * 0.8);
+
+      ctx.beginPath();
+      const spiralTurns = 3; // Number of spiral turns.
+      const maxRadius = baseRadius * 0.8; // Maximum radius for the spiral.
+      // Offset so that the spiral starts a bit outside the album cover.
+      const spiralOffset = innerRadius + 20; // Adjust this offset as needed.
+      for (let angle = 0; angle < spiralTurns * Math.PI * 2; angle += 0.1) {
+        // The radius now grows from spiralOffset outward.
+        const radius =
+          spiralOffset +
+          ((maxRadius - spiralOffset) / (spiralTurns * Math.PI * 2)) * angle;
+        const x = radius * Math.cos(angle);
+        const y = radius * Math.sin(angle);
+        if (angle === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.strokeStyle = currentColor;
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = currentColor;
+      ctx.stroke();
+      ctx.restore();
+
+      // Continue with the vignette overlay.
       const gradient = ctx.createRadialGradient(
         centerX,
         centerY,
@@ -283,6 +396,36 @@ const Visualizer = ({ track, token }) => {
       gradient.addColorStop(1, "rgba(0, 0, 0, 0.4)");
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Then, inside your animate loop add the background drawing effect:
+      bgParticles.forEach((p) => {
+        // Update particle position.
+        p.x += p.velocityX;
+        p.y += p.velocityY;
+        // Wrap around the canvas edges.
+        if (p.x < 0) p.x = canvas.width;
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height;
+        if (p.y > canvas.height) p.y = 0;
+
+        // Draw particle as a soft glowing dot.
+        ctx.save();
+        const gradient = ctx.createRadialGradient(
+          p.x,
+          p.y,
+          0,
+          p.x,
+          p.y,
+          p.size
+        );
+        gradient.addColorStop(0, `rgba(255, 255, 255, ${p.brightness})`);
+        gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
 
       animationRef.current = requestAnimationFrame(animate);
     };
