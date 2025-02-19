@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import SpotifyAuth from "./SpotifyAuth";
 import Visualizer from "./Visualizer";
+import { FaPowerOff } from "react-icons/fa";
 
 const App = () => {
   const [token, setToken] = useState("");
@@ -82,12 +83,12 @@ const App = () => {
         <SpotifyAuth />
       ) : (
         <>
-          {/* <button
-            className="absolute top-5 right-5 px-4 py-2 bg-green-500 text-white rounded-full cursor-pointer z-10"
+          <button
+            className="absolute top-5 right-5 px-4 py-2 bg-green-500 rounded-full cursor-pointer z-10 opacity-25 hover:opacity-100"
             onClick={handleLogout}
           >
-            Logout
-          </button> */}
+            <FaPowerOff size={20} />
+          </button>
           <Visualizer track={track} token={token} />
         </>
       )}
