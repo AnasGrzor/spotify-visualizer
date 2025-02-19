@@ -129,7 +129,8 @@ const Visualizer = ({ track, token }) => {
       targetColorRGB = parseRGB(randomColor());
     }, 5000);
 
-    const segments = 120;
+    // Initial shape parameters.
+    let segments = 120;
     const depthMax = 20;
     const shapeLerpRate = 0.02;
     let shapeOffsets = new Array(segments + 1)
@@ -144,23 +145,39 @@ const Visualizer = ({ track, token }) => {
       }
     }, 3000);
 
-    // Pop effect: change overall size every 10 seconds.
+    // Base pop parameters (reduced boost).
     let popMagnitude = 1;
     let targetPopMagnitude = 1;
     const popInterval = setInterval(() => {
-      targetPopMagnitude = Math.random() * 0.7 + 0.8;
+      targetPopMagnitude = Math.random() * 0.5 + 0.8;
     }, 10000);
 
-    // Add a very fast beat at random: every 150ms, with a 20% chance, boost the pop.
+    // Very fast beat: every 150ms.
+    // With a 30% chance, boost popMagnitude moderately.
+    // With a 40% chance, reinitialize shape parameters.
     const fastBeatInterval = setInterval(() => {
-      if (Math.random() < 0.2) {
-        targetPopMagnitude = Math.random() * 0.3 + 1.6;
+      if (Math.random() < 0.3) {
+        targetPopMagnitude = Math.random() * 0.2 + 1.3;
+      }
+      if (Math.random() < 0.4) {
+        segments = Math.floor(Math.random() * 220) + 80;
+        shapeOffsets = new Array(segments + 1)
+          .fill(0)
+          .map(() => Math.random() * depthMax);
+        targetOffsets = new Array(segments + 1)
+          .fill(0)
+          .map(() => Math.random() * depthMax);
       }
     }, 150);
 
     let phase = 0;
     const fadeSpeed = 0.05;
 
+    // Subtle shape scale oscillation variables.
+    let scaleOsc = 1;
+    let targetScaleOsc = 1;
+
+    // Animate loop.
     const animate = () => {
       if (!isPlayingRef.current) {
         animationRef.current = requestAnimationFrame(animate);
@@ -168,8 +185,13 @@ const Visualizer = ({ track, token }) => {
       }
 
       phase += 0.005;
+      // Oscillate scale subtly over time.
+      targetScaleOsc = 1 + 0.02 * Math.sin(phase * 2);
+      scaleOsc = lerp(scaleOsc, targetScaleOsc, 0.02);
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Update color.
       currentColorRGB = currentColorRGB.map((c, i) =>
         lerp(c, targetColorRGB[i], fadeSpeed)
       );
@@ -178,8 +200,9 @@ const Visualizer = ({ track, token }) => {
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
       const baseRadius =
-        (Math.min(canvas.width, canvas.height) / 4) * popMagnitude;
+        (Math.min(canvas.width, canvas.height) / 4) * popMagnitude * scaleOsc; // Apply subtle scale oscillation.
 
+      // Draw main shape.
       ctx.save();
       ctx.beginPath();
       let points = [];
@@ -209,6 +232,7 @@ const Visualizer = ({ track, token }) => {
       ctx.stroke();
       ctx.restore();
 
+      // Draw bleeding radial lines.
       ctx.save();
       points.forEach(({ x, y, angle, radius }) => {
         const bleedingLength = 15;
@@ -223,6 +247,7 @@ const Visualizer = ({ track, token }) => {
       });
       ctx.restore();
 
+      // Draw inner circle with album cover ("record").
       const innerRadius = baseRadius / 3;
       ctx.save();
       ctx.translate(centerX, centerY);
@@ -244,6 +269,20 @@ const Visualizer = ({ track, token }) => {
         ctx.fill();
       }
       ctx.restore();
+
+      // Draw subtle gradient overlay for a vignette effect.
+      const gradient = ctx.createRadialGradient(
+        centerX,
+        centerY,
+        Math.min(canvas.width, canvas.height) / 4,
+        centerX,
+        centerY,
+        Math.max(canvas.width, canvas.height) / 1.5
+      );
+      gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0.4)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       animationRef.current = requestAnimationFrame(animate);
     };
