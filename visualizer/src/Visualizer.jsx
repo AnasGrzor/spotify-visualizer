@@ -105,6 +105,7 @@ const Visualizer = ({ track, token }) => {
       track.item.album.images[0]
     ) {
       albumImgRef.current = new Image();
+      albumImgRef.current.crossOrigin = "Anonymous"; // Allow cross-origin resource sharing.
       albumImgRef.current.src = track.item.album.images[0].url;
     } else {
       albumImgRef.current = null;
@@ -189,10 +190,17 @@ const Visualizer = ({ track, token }) => {
         y: Math.random() * canvas.height,
         size: Math.random() * 2 + 1,
         brightness: Math.random() * 0.5 + 0.5,
+        depth: Math.random() * 0.7 + 0.3, // depth factor between 0.3 and 1.0
         velocityX: (Math.random() - 0.5) * 0.2,
         velocityY: (Math.random() - 0.5) * 0.2,
       });
     }
+
+    // Declare shootingStars array alongside bgParticles.
+    let shootingStars = [];
+
+    // At the top of your useEffect (before animate), declare vortexAlpha:
+    let vortexAlpha = 1;
 
     // Animate loop.
     const animate = () => {
@@ -206,7 +214,14 @@ const Visualizer = ({ track, token }) => {
       targetScaleOsc = 1 + 0.02 * Math.sin(phase * 2);
       scaleOsc = lerp(scaleOsc, targetScaleOsc, 0.02);
 
-      ctx.fillStyle = "rgba(0, 0, 0, 0.2)"; // Adjust the alpha to control trail length.
+      // --- Trailing Effect --- //
+      // Draw a semi-transparent rectangle over the canvas to achieve trails.
+      // ----- Adaptive Trailing Effect ----- //
+      // Clamp popMagnitude between 1 and 2 (you can adjust these limits).
+      const clampedPop = Math.max(1, Math.min(popMagnitude, 2));
+      // Interpolate between 0.1 (for calm) and 0.3 (for energetic) based on popMagnitude.
+      const trailAlpha = lerp(0.1, 0.3, (clampedPop - 1) / 1);
+      ctx.fillStyle = `rgba(0, 0, 0, ${trailAlpha})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // --- Shake Effect --- //
@@ -353,18 +368,19 @@ const Visualizer = ({ track, token }) => {
       );
       currentColor = rgbToString(currentColorRGB);
 
-      // Add an extra geometric layer: a rotating spiral vortex that starts outside the album cover.
+      // ----- Enhanced Spiral Vortex Effect with Evaporation & Minimal Colors ----- //
+      vortexAlpha = popMagnitude > 1.4 ? 1 : vortexAlpha * 0.98; // Evaporation effect.
+
       ctx.save();
       ctx.translate(centerX, centerY);
       ctx.rotate(phase * 0.8);
+      ctx.globalAlpha = vortexAlpha;
 
       ctx.beginPath();
-      const spiralTurns = 3; // Number of spiral turns.
-      const maxRadius = baseRadius * 0.8; // Maximum radius for the spiral.
-      // Offset so that the spiral starts a bit outside the album cover.
-      const spiralOffset = innerRadius + 20; // Adjust this offset as needed.
+      const spiralTurns = 3; // Total spiral turns.
+      const maxRadius = baseRadius * 0.8; // Maximum spiral radius.
+      const spiralOffset = innerRadius + 20; // Offset so the spiral starts outside the album cover.
       for (let angle = 0; angle < spiralTurns * Math.PI * 2; angle += 0.1) {
-        // The radius now grows from spiralOffset outward.
         const radius =
           spiralOffset +
           ((maxRadius - spiralOffset) / (spiralTurns * Math.PI * 2)) * angle;
@@ -376,12 +392,165 @@ const Visualizer = ({ track, token }) => {
           ctx.lineTo(x, y);
         }
       }
-      ctx.strokeStyle = currentColor;
+      ctx.strokeStyle = currentColor; // Can leave as-is for overall harmony.
       ctx.lineWidth = 2;
       ctx.shadowBlur = 10;
       ctx.shadowColor = currentColor;
       ctx.stroke();
       ctx.restore();
+
+      // ----- Enhanced Layered Spiral Vortex with Minimal Colors & Glitch Effects ----- //
+      ctx.save();
+      ctx.translate(centerX, centerY);
+
+      // Layered spiral drawing.
+      for (let layer = 0; layer < 2; layer++) {
+        ctx.save();
+        // Rotate each spiral layer slightly differently.
+        ctx.rotate(phase * (0.8 + layer * 0.1));
+
+        ctx.beginPath();
+        const layerSpiralTurns = 3; // Number of turns.
+        const layerMaxRadius = baseRadius * 0.8; // Maximum radius for the spiral.
+        // Offset for each layer to prevent overlapped start.
+        const layerSpiralOffset = innerRadius + 20 + layer * 10;
+        // Draw smooth spiral from layerSpiralOffset to layerMaxRadius.
+        for (
+          let angle = 0;
+          angle < layerSpiralTurns * Math.PI * 2;
+          angle += 0.05
+        ) {
+          const radius =
+            layerSpiralOffset +
+            ((layerMaxRadius - layerSpiralOffset) /
+              (layerSpiralTurns * Math.PI * 2)) *
+              angle;
+          const x = radius * Math.cos(angle);
+          const y = radius * Math.sin(angle);
+          if (angle === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+
+        // Create a minimal, calming radial gradient.
+        const gradient = ctx.createRadialGradient(
+          0,
+          0,
+          layerSpiralOffset,
+          0,
+          0,
+          layerMaxRadius
+        );
+        if (layer === 0) {
+          // Calm gray palette.
+          gradient.addColorStop(0, "rgba(150, 150, 150, 0.8)");
+          gradient.addColorStop(1, "rgba(150, 150, 150, 0)");
+        } else {
+          // Subtle blue-gray palette.
+          gradient.addColorStop(0, "rgba(100, 120, 255, 0.8)");
+          gradient.addColorStop(1, "rgba(100, 120, 255, 0)");
+        }
+
+        ctx.strokeStyle = gradient;
+        // Vary the line width by layer.
+        ctx.lineWidth = 3 + layer * 2;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = gradient;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.restore();
+      ctx.globalAlpha = 1;
+
+      // ----- Glitch Effect ----- //
+      // With a small chance each frame, pick a random rectangular section of the canvas and re-draw it slightly offset.
+      if (Math.random() < 0.03) {
+        // Adjust probability as needed.
+        const glitchWidth = Math.random() * 100 + 250;
+        const glitchHeight = Math.random() * 20 + 110;
+        const glitchX = Math.random() * canvas.width;
+        const glitchY = Math.random() * canvas.height;
+        const offsetX = Math.random() * 20 - 10;
+        const offsetY = Math.random() * 20 - 10;
+        const imageData = ctx.getImageData(
+          glitchX,
+          glitchY,
+          glitchWidth,
+          glitchHeight
+        );
+        ctx.putImageData(imageData, glitchX + offsetX, glitchY + offsetY);
+      }
+
+      // ----- Enhanced Layered Spiral Vortex with Minimal Colors ----- //
+      ctx.save();
+      ctx.translate(centerX, centerY);
+
+      for (let layer = 0; layer < 2; layer++) {
+        ctx.save();
+        // Rotate each spiral layer slightly differently.
+        ctx.rotate(phase * (0.8 + layer * 0.1));
+
+        ctx.beginPath();
+        const layerSpiralTurns = 3; // Number of turns.
+        const layerMaxRadius = baseRadius * 0.8; // Maximum radius for the spiral.
+        // Offset for each layer to prevent overlapped start.
+        const layerSpiralOffset = innerRadius + 20 + layer * 10;
+        // Draw a smoother spiral.
+        for (
+          let angle = 0;
+          angle < layerSpiralTurns * Math.PI * 2;
+          angle += 0.05
+        ) {
+          const radius =
+            layerSpiralOffset +
+            ((layerMaxRadius - layerSpiralOffset) /
+              (layerSpiralTurns * Math.PI * 2)) *
+              angle;
+          const x = radius * Math.cos(angle);
+          const y = radius * Math.sin(angle);
+          if (angle === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+
+        // Calculate a hue value based on phase so it cycles over time.
+        const hue = Math.floor((phase * 100) % 360);
+        // For the complementary layer subtract 180°.
+        const complementaryHue = (hue + 180) % 360;
+
+        // Create a radial gradient with cycling colors.
+        const gradient = ctx.createRadialGradient(
+          0,
+          0,
+          layerSpiralOffset,
+          0,
+          0,
+          layerMaxRadius
+        );
+        if (layer === 0) {
+          gradient.addColorStop(0, `hsla(${hue}, 50%, 50%, 0.8)`);
+          gradient.addColorStop(1, `hsla(${hue}, 50%, 50%, 0)`);
+        } else {
+          gradient.addColorStop(0, `hsla(${complementaryHue}, 50%, 50%, 0.8)`);
+          gradient.addColorStop(1, `hsla(${complementaryHue}, 50%, 50%, 0)`);
+        }
+
+        ctx.strokeStyle = gradient;
+        // Vary the line width by layer.
+        ctx.lineWidth = 3 + layer * 2;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = gradient;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.restore();
+      ctx.globalAlpha = 1;
 
       // Continue with the vignette overlay.
       const gradient = ctx.createRadialGradient(
@@ -410,7 +579,7 @@ const Visualizer = ({ track, token }) => {
 
         // Draw particle as a soft glowing dot.
         ctx.save();
-        const gradient = ctx.createRadialGradient(
+        const particleGradient = ctx.createRadialGradient(
           p.x,
           p.y,
           0,
@@ -418,14 +587,79 @@ const Visualizer = ({ track, token }) => {
           p.y,
           p.size
         );
-        gradient.addColorStop(0, `rgba(255, 255, 255, ${p.brightness})`);
-        gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
-        ctx.fillStyle = gradient;
+        particleGradient.addColorStop(
+          0,
+          `rgba(255, 255, 255, ${p.brightness})`
+        );
+        particleGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.fillStyle = particleGradient;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       });
+
+      // --- Shooting Stars Effect --- //
+
+      // With a small chance each frame, spawn a new shooting star.
+      if (Math.random() < 0.005) {
+        // Adjust probability as needed.
+        const startX = Math.random() * canvas.width; // Random starting x.
+        const startY = 0; // Start from the top.
+        // Angle roughly 45° downward with slight variation.
+        const angle = Math.PI / 4 + (Math.random() - 0.5) * 0.2;
+        const speed = Math.random() * 5 + 5; // Speed between 5 and 10 pixels/frame.
+        shootingStars.push({
+          x: startX,
+          y: startY,
+          angle: angle,
+          velocityX: speed * Math.cos(angle),
+          velocityY: speed * Math.sin(angle),
+          length: Math.random() * 50 + 60, // Length between 30 and 80 pixels.
+          alpha: 1.0,
+        });
+      }
+
+      // Update and draw shooting stars.
+      for (let i = shootingStars.length - 1; i >= 0; i--) {
+        const star = shootingStars[i];
+        // Update position.
+        star.x += star.velocityX;
+        star.y += star.velocityY;
+        // Fade out.
+        star.alpha -= 0.02;
+        // Remove star if fully faded or off-canvas.
+        if (
+          star.alpha <= 0 ||
+          star.x > canvas.width ||
+          star.y > canvas.height
+        ) {
+          shootingStars.splice(i, 1);
+          continue;
+        }
+        // Draw the shooting star as a line.
+        ctx.save();
+        ctx.beginPath();
+        // The tail extends opposite to the velocity direction.
+        const tailX = star.x - star.length * Math.cos(star.angle);
+        const tailY = star.y - star.length * Math.sin(star.angle);
+        ctx.moveTo(star.x, star.y);
+        ctx.lineTo(tailX, tailY);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${star.alpha})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // ----- Distortion Effect ----- //
+      const sliceHeight = 10; // Height of each horizontal slice.
+      for (let y = 0; y < canvas.height; y += sliceHeight) {
+        // The horizontal offset is modulated by a sine function.
+        const offset =
+          20 * Math.sin((y / canvas.height) * Math.PI * 2 + phase * 3);
+        const slice = ctx.getImageData(0, y, canvas.width, sliceHeight);
+        ctx.putImageData(slice, offset, y);
+      }
 
       animationRef.current = requestAnimationFrame(animate);
     };
